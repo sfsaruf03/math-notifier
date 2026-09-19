@@ -1,30 +1,39 @@
+const express = require('express');
 const admin = require('firebase-admin');
+const app = express();
+app.use(express.json());
 
 if (!admin.apps.length) {
-  admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-    }),
-  });
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
 }
 
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
+app.post('/api/send', async (req, res) => {
+    const { token, title, body } = req.body;
+    
+    if (!token || !title || !body) {
+        return res.status(400).send('Missing token, title, or body');
+    }
 
-  const { token, title, body } = req.body;
+    try {
+                const message = {
+            data: { 
+                title: title, 
+                body: body 
+            },
+            android: {
+                priority: "high"
+            },
+            token: token
+        };
 
-  try {
-    const message = {
-      notification: { title, body },
-      token: token,
-    };
-    const response = await admin.messaging().send(message);
-    res.status(200).json({ success: true, response });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-}
+        const response = await admin.messaging().send(message);
+        res.status(200).send({ success: true, response });
+    } catch (error) {
+        res.status(500).send({ success: false, error: error.message });
+    }
+});
+
+module.exports = app;
